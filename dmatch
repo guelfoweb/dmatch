@@ -1,0 +1,81 @@
+#!/bin/bash
+
+# ----------------------------------------------------------------------------
+# "THE BEER-WARE LICENSE" (Revision 42):
+# guelfoweb@gmail.com wrote this file. As long as you retain this notice you
+# can do whatever you want with this stuff. If we meet some day, and you think
+# this stuff is worth it, you can buy me a beer in return Gianni Amato
+# ----------------------------------------------------------------------------
+
+# Dump Match:
+# a simple pattern matching implementation to get the results of the dumps
+
+# Usage:
+# dmatch <patterns file> <dir or file dump>
+
+# get path
+scriptpath=$( cd "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )
+scriptname=$(basename "$0")
+
+# check args
+if [[ "$1" == "--help" || "$1" == "-h" || "$1" == "" ]]; then
+	if [[ "$scriptpath" != "/usr/local/bin" ]]; then
+		echo "$scriptname --install"
+	fi
+	echo "$scriptname <file> <dump>"
+	exit 0
+elif [[ "$1"  == "--install" && "$scriptpath" != "/usr/local/bin" ]]; then
+	if [[ $(id -u) = 0 ]]; then
+		cp "$scriptpath/$scriptname" "/usr/local/bin/dmatch"
+		chmod +x "/usr/local/bin/dmatch"
+		echo "dmatch installed!"
+		exit 0
+	else
+		echo "root required!"
+		exit 1
+	fi
+elif [[ ! -f "$1" ]]; then
+	echo "patterns file not found"
+	exit 1
+fi
+
+if [[ -f "$2" ]]; then
+	RECURSIVE=""
+elif [[ -d "$2" ]]; then
+	RECURSIVE="-r"
+else
+	echo "dump not found"
+	exit 1
+fi
+
+# create folder
+timestamp=$(date +'%s')
+diroutput="output_$timestamp"
+mkdir $diroutput
+echo "folder -> $diroutput/"
+echo "file   -> $diroutput/.$timestamp"
+echo ""
+
+# start
+grep -f "$1" $RECURSIVE "$2" >> "$diroutput/.$timestamp"
+
+# save results
+while IFS= read -r line
+do
+	line_to_grep=$(echo $line | sed 's/\./\\./')
+	grep "$line_to_grep" "$diroutput/.$timestamp" >> "$diroutput/$line.txt"
+done < "$1"
+
+# purge results
+find "$diroutput" -size 0 -print -delete > /dev/null
+
+# count
+finished=$(date +'%s')
+time=$(expr $finished - $timestamp)
+matches=$(ls $diroutput | wc -l)
+
+# final output
+wc -l "$diroutput"/* | sed "s/$diroutput\///"
+echo ""
+echo "matched [$matches] patterns in [$time] seconds."
+exit 0
