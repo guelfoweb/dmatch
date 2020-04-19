@@ -75,7 +75,7 @@ time=$(expr $finished - $timestamp)
 matches=$(ls $diroutput | wc -l)
 
 # final output
-wc -l "$diroutput"/* | sed "s/$diroutput\///"
+wc -l "$diroutput"/* 2> /dev/null | sed "s/$diroutput\///"
 echo ""
 echo "matched [$matches] patterns in [$time] seconds."
 exit 0
