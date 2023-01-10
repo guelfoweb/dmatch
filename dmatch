@@ -11,71 +11,80 @@
 # a simple pattern matching implementation to get the results of the dumps
 
 # Usage:
-# dmatch <patterns file> <dir or file dump>
+# dmatch <pattern file> <dir or file dump>
 
-# get path
-scriptpath=$( cd "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )
-scriptname=$(basename "$0")
+version="1.1"
 
 # check args
 if [[ "$1" == "--help" || "$1" == "-h" || "$1" == "" ]]; then
-	if [[ "$scriptpath" != "/usr/local/bin" ]]; then
-		echo "$scriptname --install"
-	fi
-	echo "$scriptname <file> <dump>"
-	exit 0
-elif [[ "$1"  == "--install" && "$scriptpath" != "/usr/local/bin" ]]; then
-	if [[ $(id -u) = 0 ]]; then
-		cp "$scriptpath/$scriptname" "/usr/local/bin/dmatch"
-		chmod +x "/usr/local/bin/dmatch"
-		echo "dmatch installed!"
-		exit 0
-	else
-		echo "root required!"
-		exit 1
-	fi
+	echo "$0 <pattern file> <dir or file dump>"
+	exit
+elif [[ "$1" == "--version" || "$1" == "-v" ]]; then
+	echo "$0 v.$version"
+	exit
 elif [[ ! -f "$1" ]]; then
-	echo "patterns file not found"
-	exit 1
+	echo "pattern file not found"
+	exit
 fi
 
+# recursive grep if $2 is folder
 if [[ -f "$2" ]]; then
 	RECURSIVE=""
 elif [[ -d "$2" ]]; then
 	RECURSIVE="-r"
 else
 	echo "dump not found"
-	exit 1
+	exit
 fi
 
-# create folder
+# constants
 timestamp=$(date +'%s')
 diroutput="output_$timestamp"
+tempfile="$diroutput/.$timestamp"
+patterncount=$(wc -l < "$1")
+
+# make output folder
 mkdir $diroutput
-echo "folder -> $diroutput/"
-echo "file   -> $diroutput/.$timestamp"
+
+echo "Looking for $patterncount patterns ..."
 echo ""
 
-# start
-grep -f "$1" $RECURSIVE "$2" >> "$diroutput/.$timestamp"
+# move all matches to hidden tempfile
+grep -f "$1" $RECURSIVE "$2" >> "$tempfile"
 
-# save results
+# read pattern file "$1" line by line
 while IFS= read -r line
 do
-	line_to_grep=$(echo $line | sed 's/\./\\./')
-	grep "$line_to_grep" "$diroutput/.$timestamp" >> "$diroutput/$line.txt"
+	# replace . with \. regex
+	rule=$(echo $line | sed 's/\./\\./g')
+
+	# skip blank line or space
+	if [[ ! "$rule" =~ ^$ || "$rule" =~ ^[[:space:]]+$ ]]; then
+		
+		# purge line if rule starts with "." or "@"
+		# ex: .domain.com or @domain.com
+		line=$(echo $line | sed 's/^[\.|@]//')
+		
+		# move each match to txt file: $line.txt
+		grep "$rule" "$tempfile" >> "$diroutput/$line.txt"
+	fi
 done < "$1"
 
-# purge results
+# remove empty file from output directory
 find "$diroutput" -size 0 -print -delete > /dev/null
 
 # count
 finished=$(date +'%s')
 time=$(expr $finished - $timestamp)
-matches=$(ls $diroutput | wc -l)
+matches=$(ls "$diroutput" | wc -l)
 
-# final output
-wc -l "$diroutput"/* 2> /dev/null | sed "s/$diroutput\///"
+# remove hidden tempfile
+rm "$tempfile"
+
+# show output
+wc -l "$diroutput/"* | sed "s/$diroutput\///" | sed 's/\.txt$//' # sort -nr order by count
 echo ""
-echo "matched [$matches] patterns in [$time] seconds."
-exit 0
+echo "folder -> $diroutput"
+echo ""
+echo "matched $matches/$patterncount patterns in $time seconds."
+exit
