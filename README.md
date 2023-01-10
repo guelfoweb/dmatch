@@ -1,6 +1,6 @@
 # dmatch
 
-a simple pattern matching implementation to get and organize the results of the dumps
+dump match is a simple pattern matching implementation to get and organize the results of the dumps
 
 
 ## Usage
